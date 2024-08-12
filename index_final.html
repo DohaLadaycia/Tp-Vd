@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="UTF-8" />
+    <script src="https://d3js.org/d3.v6.min.js"></script>
+    <title>Netflix Data Visualization</title>
+    <style>
+        button {
+            background-color: #E50914; /* Netflix red */
+            color: #fff; /* White text */
+            padding: 10px 20px;
+            border: none;
+            cursor: pointer;
+            margin: 5px;
+            border-radius: 5px; /* Add rounded corners */
+            font-family: 'Gotham', sans-serif; /* Apply Netflix font or a similar one */
+        }
+    </style>
+</head>
+
+<body>
+    <img src="téléchargement.png" alt="Logo" height="50" width="50" style="position: fixed; bottom: 10px; right: 10px;">
+    <label for="countryDropdown">Choose a Country:</label>
+    <select id="countryDropdown"></select>
+    <div id="currentCountry"></div>
+    <script>
+        const scatterData = (callback) => {
+            d3.csv("netflix_titles.csv").then((data) => {
+                let dataset = data.map((d) => {
+                    return {
+                        show_id: d.show_id,
+                        type: d.type,
+                        title: d.title,
+                        country: d.country,
+                        date_added: d.date_added,
+                        release_year: d.release_year,
+                        rating: d.rating,
+                        duration: d.duration,
+                        listed_in: d.listed_in,
+                        description: d.description,
+                        cast: d.cast,
+                        director: d.director,
+                        duration: d.duration,
+
+                    };
+                });
+                callback(dataset);
+            });
+        };
+        const tooltip = d3.select("body")
+            .append("div")
+            .style("position", "absolute")
+            .style("background", "white")
+            .style("color", "black")
+            .style("border-radius", "5px");
+
+        scatterData((data) => {
+            let h = 600;
+            let w = 1500;
+            let padding = 40;
+            let i = 0;
+            let currentCountryIndexp = 0;
+            let currentCountryIndex = 0;
+            let uniqueCountries = Array.from(new Set(data.flatMap((d) => {
+
+                if (d.country.indexOf(',') !== -1) {
+                    return d.country.split(', ').map(country => country.trim());
+                } else {
+                    return [d.country];
+                }
+            })));
+            let dropdown = d3.select("#countryDropdown");
+            let svg = d3.select("body")
+                .append("svg")
+                .attr("height", h)
+                .attr("width", w);
+            let uniqueType = Array.from(new Set(data.map(d => d.type)));
+            let colorScale = d3.scaleOrdinal()
+                .domain(uniqueType)
+                .range(d3.schemeCategory10);
+            const each40 = (k, data) => {
+
+                if (data.length > 40 * (k + 1)) {
+                    data1 = data.slice(k * 40, (k + 1) * 40);
+                    i = i + 1;
+                } else {
+                    data1 = data.slice(k * 40, data.length);
+
+                    currentCountryIndex++;
+                    i = 0;
+                    console.log(i)
+                }
+                animateData(data1);
+            };
+            const displayDataForCountry = (k, country) => {
+                data2 = data.filter(d => d.country.includes(country));
+                each40(k, data2)
+            };
+            const animateData = (data) => {
+                let xScale = d3.scaleBand()
+                    .domain(data.map((d) => d.show_id))
+                    .range([padding, w - padding])
+                    .padding(0.9);
+                let yScale = d3.scaleBand()
+                    .domain(data.map((d) => d.rating))
+                    .range([h - padding, padding])
+                    .padding(0.9);
+                svg.selectAll("*").remove();
+                let colorLegend = svg.append("g")
+                    .attr("transform", "translate(10,10)");
+                let countryLegend = svg.append("g")
+                    .attr("transform", "translate(10,10)");
+                colorLegend.selectAll("rect")
+                    .data(colorScale.domain())
+                    .enter()
+                    .append("rect")
+                    .attr("x", 1350)
+                    .attr("y", (d, i) => i * 20)
+                    .attr("width", 15)
+                    .attr("height", 15)
+                    .attr("fill", d => colorScale(d));
+                colorLegend.selectAll("text")
+                    .data(colorScale.domain())
+                    .enter()
+                    .append("text")
+                    .attr("x", 1400)
+                    .attr("y", (d, i) => i * 20 + 12)
+                    .text(d => d);
+
+                svg.selectAll("shape")
+                    .data(data)
+                    .enter()
+                    .append('circle')
+                    .attr("cx", d => xScale(d.show_id))
+                    .attr("cy", d => yScale(d.rating))
+                    .attr('r', (d) => {
+                        if (d.type == 'Movie') {
+
+                            return d.duration.substring(0, 3) / 10
+                        } else {
+                            return d.duration.substring(0, 2) * 3
+                        }
+
+                    })
+                    .attr("fill", d => colorScale(d.type))
+                    .on("mouseover", (event, d) => {
+                        tooltip.transition()
+                            .duration(20)
+                            .style("opacity", 1);
+                        tooltip.html(
+                                `Title: ${d.title} <br>` +
+                                `Date: ${d.date_added}`
+
+                            )
+                            .style("left", (event.pageX + 20) + "px")
+                            .style("top", (event.pageY - 20) + "px");
+                    })
+                    .on("mouseout", (d) => {
+                        tooltip.transition()
+                            .duration(200)
+                            .style("opacity", 0);
+                    })
+                    .on("click", function(d) {
+                        console.log("data", d); // Log the data object to the console
+                        openNewTab(d.srcElement.__data__);
+                    })
+                svg.selectAll("text")
+                    .data(data)
+                    .enter()
+                    .append("text")
+                    .text((d) => {
+                        return d.release_year;
+                    })
+                    .attr("x", (d) => {
+
+                        return xScale(d.show_id);
+                    })
+                    .attr("y", (d) => {
+                        return yScale(d.rating);
+                    })
+                    .attr("fill", "black")
+                    .attr("font-size", "12px")
+                let xAxis = d3.axisBottom(xScale);
+                let yAxis = d3.axisLeft(yScale);
+                svg.append("g")
+                    .attr("class", "axis")
+                    .attr("transform", "translate(0, " + (h - padding) + ")")
+                    .call(xAxis);
+                svg.append("g")
+                    .attr("class", "axis")
+                    .attr("transform", "translate(" + padding + ", 0)")
+                    .call(yAxis);
+            }
+
+            const animation1 = () => {
+                d3.select("#currentCountry")
+                    .text(uniqueCountries[currentCountryIndex])
+                    .style("position", (400, 100))
+                    .style("top", "10px")
+                    .style("left", "10px")
+                    .style("font-family", "Arial, sans-serif")
+                    .style("font-size", "20px")
+                    .style("color", "gray");
+                if (currentCountryIndex < uniqueCountries.length) {
+                    displayDataForCountry(i, uniqueCountries[currentCountryIndex]);
+
+
+                } else {
+                    i = 0;
+                    currentCountryIndex = 0;
+                    currentCountryIndexp = 0;
+                    d3.select("#currentCountry")
+                        .text(uniqueCountries[currentCountryIndex])
+                        .style("position", (400, 100))
+                        .style("top", "10px")
+                        .style("left", "10px")
+                        .style("font-family", "Arial, sans-serif")
+                        .style("font-size", "20px")
+                        .style("color", "gray");
+                    displayDataForCountry(i, uniqueCountries[currentCountryIndex]);
+
+
+                }
+
+            }
+
+            const animation2 = () => {
+                let selectedCountry = d3.select("#countryDropdown").property("value");
+                i = 0;
+                d3.select("#currentCountry")
+                    .text(selectedCountry)
+                    .style("position", (400, 100))
+                    .style("top", "10px")
+                    .style("left", "10px")
+                    .style("font-family", "Arial, sans-serif")
+                    .style("font-size", "20px")
+                    .style("color", "gray");
+                if (selectedCountry) {
+                    displayDataForCountry(i, selectedCountry);
+                    currentCountryIndex = uniqueCountries.indexOf(selectedCountry);
+                    currentCountryIndexp = uniqueCountries.indexOf(selectedCountry);
+
+                } else {
+                    currentCountryIndex = 0;
+
+                }
+            }
+            const animation3 = () => {
+                d3.select("#currentCountry")
+                    .text(uniqueCountries[currentCountryIndex])
+                    .style("position", (400, 100))
+                    .style("top", "10px")
+                    .style("left", "10px")
+                    .style("font-family", "Arial, sans-serif")
+                    .style("font-size", "20px")
+                    .style("color", "gray");
+                if (i > 1) {
+                    i = i - 2;
+                    displayDataForCountry(i, uniqueCountries[currentCountryIndex]);
+
+
+                } else if (currentCountryIndex > 0) {
+                    i = 0;
+                    currentCountryIndex--;
+                    d3.select("#currentCountry")
+                        .text(uniqueCountries[currentCountryIndex])
+                        .style("position", (400, 100))
+                        .style("top", "10px")
+                        .style("left", "10px")
+                        .style("font-family", "Arial, sans-serif")
+                        .style("font-size", "20px")
+                        .style("color", "gray");
+                    displayDataForCountry(i, uniqueCountries[currentCountryIndex]);
+
+
+                }
+
+            }
+            animation1();
+            d3.select("body")
+                .append("button")
+                .text("Animation Next")
+                .on("click", animation1);
+            d3.select("body")
+                .append("button")
+                .text("Animation pr")
+                .on("click", animation3);
+
+            dropdown.selectAll("option")
+                .data(uniqueCountries)
+                .enter()
+                .append("option")
+                .text(d => d)
+            dropdown.on("change", animation2);
+
+        })
+        const openNewTab = (d) => {
+            console.log("Clicked Data:", d);
+            const urlParams = new URLSearchParams();
+            urlParams.append("description", d.description || "N/A");
+            urlParams.append("cast", d.cast || "N/A");
+            urlParams.append("director", d.director || "N/A");
+
+            const newTab = window.open(
+                `./page2_final.html?${urlParams.toString()}`,
+                "page2_final"
+            );
+        };
+    </script>
+</body>
+
+</html>
+
+</html>
